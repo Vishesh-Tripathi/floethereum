@@ -1,344 +1,389 @@
-(function (EXPORTS) { //ethOperator v1.0.2
+(function (EXPORTS) { //ethOperator v1.2.0
   /* ETH Crypto and API Operator */
-  if (!window.ethers)
-    return console.error('ethers.js not found')
+  if (!window.ethers) 
+      return console.error('ethers.js not found');
+  
   const ethOperator = EXPORTS;
-  const isValidAddress = ethOperator.isValidAddress = (address) => {
-    try {
-      // Check if the address is a valid checksum address
-      const isValidChecksum = ethers.utils.isAddress(address);
-      // Check if the address is a valid non-checksum address
-      const isValidNonChecksum = ethers.utils.getAddress(address) === address.toLowerCase();
-      return isValidChecksum || isValidNonChecksum;
-    } catch (error) {
-      return false;
-    }
-  }
-  const ERC20ABI = [
-    {
-      "constant": true,
-      "inputs": [],
-      "name": "name",
-      "outputs": [
-        {
-          "name": "",
-          "type": "string"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "constant": false,
-      "inputs": [
-        {
-          "name": "_spender",
-          "type": "address"
-        },
-        {
-          "name": "_value",
-          "type": "uint256"
-        }
-      ],
-      "name": "approve",
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "constant": true,
-      "inputs": [],
-      "name": "totalSupply",
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "constant": false,
-      "inputs": [
-        {
-          "name": "_from",
-          "type": "address"
-        },
-        {
-          "name": "_to",
-          "type": "address"
-        },
-        {
-          "name": "_value",
-          "type": "uint256"
-        }
-      ],
-      "name": "transferFrom",
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "constant": true,
-      "inputs": [],
-      "name": "decimals",
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint8"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "constant": true,
-      "inputs": [
-        {
-          "name": "_owner",
-          "type": "address"
-        }
-      ],
-      "name": "balanceOf",
-      "outputs": [
-        {
-          "name": "balance",
-          "type": "uint256"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "constant": true,
-      "inputs": [],
-      "name": "symbol",
-      "outputs": [
-        {
-          "name": "",
-          "type": "string"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "constant": false,
-      "inputs": [
-        {
-          "name": "_to",
-          "type": "address"
-        },
-        {
-          "name": "_value",
-          "type": "uint256"
-        }
-      ],
-      "name": "transfer",
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "constant": true,
-      "inputs": [
-        {
-          "name": "_owner",
-          "type": "address"
-        },
-        {
-          "name": "_spender",
-          "type": "address"
-        }
-      ],
-      "name": "allowance",
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "payable": false,
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "payable": true,
-      "stateMutability": "payable",
-      "type": "fallback"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "name": "owner",
-          "type": "address"
-        },
-        {
-          "indexed": true,
-          "name": "spender",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "name": "value",
-          "type": "uint256"
-        }
-      ],
-      "name": "Approval",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "name": "from",
-          "type": "address"
-        },
-        {
-          "indexed": true,
-          "name": "to",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "name": "value",
-          "type": "uint256"
-        }
-      ],
-      "name": "Transfer",
-      "type": "event"
-    }
-  ]
-  const CONTRACT_ADDRESSES = {
-    usdc: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-    usdt: "0xdac17f958d2ee523a2206206994597c13d831ec7"
-  }
+  const WEI_IN_ETH = 1e18;
+  const ETHERSCAN_API_KEY = 'UIQ1Q1TVXRWD3K17AK3D7UZB5IJYCWCD7Y'; // Replace with your key
+
+  const util = ethOperator.util = {};
+
+  // Unit conversion helpers
+  util.Wei_to_ETH = value => parseFloat((value / WEI_IN_ETH).toFixed(18));
+  util.ETH_to_Wei = value => ethers.utils.parseEther(value.toString());
+
+  // Provider management
   function getProvider() {
-    // switches provider based on whether the user is using MetaMask or not
-    if (window.ethereum) {
-      return new ethers.providers.Web3Provider(window.ethereum);
-    } else {
-      return new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/6e12fee52bdd48208f0d82fb345bcb3c`)
-    }
-  }
-  function connectToMetaMask() {
-    return new Promise((resolve, reject) => {
-      // if (typeof window.ethereum === "undefined")
-      //   return reject("MetaMask not installed");
-      return resolve(true)
-      ethereum
-        .request({ method: 'eth_requestAccounts' })
-        .then((accounts) => {
-          console.log('Connected to MetaMask')
-          return resolve(accounts)
-        })
-        .catch((err) => {
-          console.log(err)
-          return reject(err)
-        })
-    })
-  }
-  // connectToMetaMask();
-  const getBalance = ethOperator.getBalance = async (address) => {
-    try {
-      if (!address || !isValidAddress(address))
-        return new Error('Invalid address');
-      // Get the balance
-      const provider = getProvider();
-      const balanceWei = await provider.getBalance(address);
-      const balanceEth = parseFloat(ethers.utils.formatEther(balanceWei));
-      return balanceEth;
-    } catch (error) {
-      console.error('Error:', error.message);
-      return error;
-    }
-  }
-  const getTokenBalance = ethOperator.getTokenBalance = async (address, token, { contractAddress } = {}) => {
-    try {
-      // if (!window.ethereum.isConnected()) {
-      //   await connectToMetaMask();
-      // }
-      if (!token)
-        return new Error("Token not specified");
-      if (!CONTRACT_ADDRESSES[token] && contractAddress)
-        return new Error('Contract address of token not available')
-      const usdcContract = new ethers.Contract(CONTRACT_ADDRESSES[token] || contractAddress, ERC20ABI, getProvider());
-      let balance = await usdcContract.balanceOf(address);
-      balance = parseFloat(ethers.utils.formatUnits(balance, 6)); // Assuming 6 decimals
-      return balance;
-    } catch (e) {
-      console.error(e);
-    }
+      if (window.ethereum) {
+          return new ethers.providers.Web3Provider(window.ethereum);
+      }
+      return new ethers.providers.JsonRpcProvider('https://mainnet.infura.io/v3/05af952d0a5a453ea5e7b7093c43a07c');
   }
 
-  const estimateGas = ethOperator.estimateGas = async ({ privateKey, receiver, amount }) => {
+  // API endpoints
+  const APIs = ethOperator.APIs = [
+      {
+          url: 'https://api.etherscan.io/api',
+          name: 'Etherscan',
+          balance({ addr }) {
+              return fetch_api(`?module=account&action=balance&address=${addr}&tag=latest`, { 
+                  url: this.url,
+                  apiKey: ETHERSCAN_API_KEY 
+              }).then(result => util.Wei_to_ETH(result.result));
+          },
+          tx({ txid }) {
+              return fetch_api(`?module=proxy&action=eth_getTransactionByHash&txhash=${txid}`, {
+                  url: this.url,
+                  apiKey: ETHERSCAN_API_KEY
+              }).then(result => formatTx(result.result));
+          },
+          txs({ addr }) {
+              return fetch_api(`?module=account&action=txlist&address=${addr}&startblock=0&endblock=99999999&sort=desc`, {
+                  url: this.url,
+                  apiKey: ETHERSCAN_API_KEY
+              }).then(result => result.result.map(tx => formatTx(tx)));
+          },
+          async broadcast({ rawTxHex }) {
+              return post(`${this.url}?module=proxy&action=eth_sendRawTransaction&hex=${rawTxHex}&apikey=${ETHERSCAN_API_KEY}`);
+          }
+      },
+      {
+          url: 'https://cloudflare-eth.com',
+          name: 'Cloudflare',
+          balance({ addr }) {
+              return fetch_api('/v1/mainnet', {
+                  url: this.url,
+                  method: 'POST',
+                  body: JSON.stringify({
+                      jsonrpc: "2.0",
+                      method: "eth_getBalance",
+                      params: [addr, "latest"],
+                      id: 1
+                  })
+              }).then(result => util.Wei_to_ETH(result.result));
+          },
+          tx({ txid }) {
+              return fetch_api('/v1/mainnet', {
+                  url: this.url,
+                  method: 'POST',
+                  body: JSON.stringify({
+                      jsonrpc: "2.0",
+                      method: "eth_getTransactionByHash",
+                      params: [txid],
+                      id: 1
+                  })
+              }).then(result => formatTx(result.result));
+          }
+      }
+  ];
+
+  // Formatting functions
+  ethOperator.util.format = {};
+  
+  const formatTx = ethOperator.util.format.tx = (tx) => {
+      try {
+          return {
+              hash: tx.hash,
+              from: tx.from,
+              to: tx.to || null,
+              value: util.Wei_to_ETH(tx.value),
+              gasPrice: util.Wei_to_ETH(tx.gasPrice),
+              gasLimit: parseInt(tx.gas, 16),
+              nonce: parseInt(tx.nonce, 16),
+              input: tx.input,
+              blockNumber: tx.blockNumber ? parseInt(tx.blockNumber, 16) : null,
+              transactionIndex: tx.transactionIndex ? parseInt(tx.transactionIndex, 16) : null
+          };
+      } catch (e) {
+          throw e;
+      }
+  };
+
+  // Multi-API fallback system
+  const multiApi = ethOperator.multiApi = async (fnName, { index = 0, ...args } = {}) => {
+      try {
+          while (index < APIs.length) {
+              if (!APIs[index][fnName] || (APIs[index].coolDownTime && APIs[index].coolDownTime > Date.now())) {
+                  index += 1;
+                  continue;
+              }
+              return await APIs[index][fnName](args);
+          }
+          throw "No API available";
+      } catch (error) {
+          console.error(error);
+          APIs[index].coolDownTime = Date.now() + 1000 * 60 * 10; // 10 minutes cooldown
+          return multiApi(fnName, { index: index + 1, ...args });
+      }
+  };
+
+  // Address validation
+  ethOperator.validateAddress = address => {
     try {
-      const provider = getProvider();
-      const signer = new ethers.Wallet(privateKey, provider);
-      return provider.estimateGas({
-        from: signer.address,
-        to: receiver,
-        value: ethers.utils.parseUnits(amount, "ether"),
+        console.log('Validating address:', address);
+        const normalizedAddress = address.toLowerCase();
+        const result = ethers.utils.isAddress(normalizedAddress);
+        console.log('ethers.utils.isAddress result:', result);
+        return result;
+    } catch (e) {
+        console.error('validateAddress error:', e);
+        return false;
+    }
+};
+
+  // Transaction parsing
+  function parseTx(tx, addressOfTx) {
+      const { hash, from, to, value, gasPrice } = tx;
+      let parsedTx = {
+          hash,
+          from,
+          to,
+          value: util.Wei_to_ETH(value),
+          gasPrice: util.Wei_to_ETH(gasPrice),
+          type: from.toLowerCase() === addressOfTx.toLowerCase() ? 'out' : 'in'
+      };
+      
+      if (parsedTx.type === 'out') {
+          parsedTx.amount = parsedTx.value;
+          parsedTx.receiver = to;
+      } else {
+          parsedTx.amount = parsedTx.value;
+          parsedTx.sender = from;
+      }
+      
+      return parsedTx;
+  }
+
+  // Fetch helper
+  const fetch_api = ethOperator.fetch = function(api, { url, method = 'GET', apiKey, body, asText = false } = {}) {
+      return new Promise((resolve, reject) => {
+          const options = { method };
+          if (body) options.body = body;
+          
+          let fullUrl = url + (apiKey ? api + `&apikey=${apiKey}` : api);
+          
+          if (method === 'GET' && body) {
+              fullUrl += '&' + new URLSearchParams(body).toString();
+          }
+          
+          fetch(fullUrl, options)
+              .then(response => {
+                  if (response.ok) {
+                      return asText ? response.text() : response.json();
+                  }
+                  throw response;
+              })
+              .then(resolve)
+              .catch(reject);
       });
-    } catch (e) {
-      throw new Error(e)
-    }
+  };
+
+  // POST helper
+  async function post(url, data, { asText = false } = {}) {
+      try {
+          const response = await fetch(url, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(data)
+          });
+          
+          if (response.ok) {
+              return asText ? await response.text() : await response.json();
+          }
+          throw response;
+      } catch (e) {
+          throw e;
+      }
   }
 
-  const sendTransaction = ethOperator.sendTransaction = async ({ privateKey, receiver, amount }) => {
-    try {
-      const provider = getProvider();
-      const signer = new ethers.Wallet(privateKey, provider);
-      const limit = await estimateGas({ privateKey, receiver, amount })
-      // Creating and sending the transaction object
-      return signer.sendTransaction({
-        to: receiver,
-        value: ethers.utils.parseUnits(amount, "ether"),
-        gasLimit: limit,
-        nonce: signer.getTransactionCount(),
-        maxPriorityFeePerGas: ethers.utils.parseUnits("2", "gwei"),
-      })
-    } catch (e) {
-      throw new Error(e)
-    }
-  }
+  // Broadcast transaction
+  const broadcastTx = ethOperator.broadcastTx = rawTxHex => {
+      return multiApi('broadcast', { rawTxHex });
+  };
 
-  const sendToken = ethOperator.sendToken = async ({ token, privateKey, amount, receiver, contractAddress }) => {
-    // Create a wallet using the private key
-    const wallet = new ethers.Wallet(privateKey, getProvider());
-    // Contract interface
-    const tokenContract = new ethers.Contract(CONTRACT_ADDRESSES[token] || contractAddress, ERC20ABI, wallet);
-    // Convert the amount to the smallest unit of USDC (wei)
-    const amountWei = ethers.utils.parseUnits(amount.toString(), 6); // Assuming 6 decimals for USDC
+  // Key/address management
+  Object.defineProperties(ethOperator, {
+      newKeys: {
+          get: () => {
+              const wallet = ethers.Wallet.createRandom();
+              return {
+                  privateKey: wallet.privateKey,
+                  address: wallet.address
+              };
+          }
+      },
+      addressFromPrivateKey: {
+          value: privateKey => {
+              try {
+                  return new ethers.Wallet(privateKey).address;
+              } catch {
+                  return null;
+              }
+          }
+      }
+  });
 
-    // Call the transfer function on the USDC contract
-    return tokenContract.transfer(receiver, amountWei)
-  }
+  // Verify key matches address
+  ethOperator.verifyKey = (address, key) => {
+      try {
+          const wallet = new ethers.Wallet(key);
+          return wallet.address.toLowerCase() === address.toLowerCase();
+      } catch {
+          return false;
+      }
+  };
+
+  // Balance checks
+  ethOperator.getBalance = addr => {
+      return new Promise((resolve, reject) => {
+          if (!ethOperator.validateAddress(addr))
+              return reject("Invalid address");
+          multiApi('balance', { addr })
+              .then(resolve)
+              .catch(reject);
+      });
+  };
+
+  // Token balance check
+  ethOperator.getTokenBalance = (addr, tokenAddress) => {
+      return new Promise((resolve, reject) => {
+          if (!ethOperator.validateAddress(addr))
+              return reject("Invalid address");
+              
+          const provider = getProvider();
+          const contract = new ethers.Contract(
+              tokenAddress, 
+              [
+                  "function balanceOf(address owner) view returns (uint256)",
+                  "function decimals() view returns (uint8)"
+              ], 
+              provider
+          );
+          
+          Promise.all([
+              contract.balanceOf(addr),
+              contract.decimals()
+          ])
+          .then(([balance, decimals]) => {
+              resolve(parseFloat(ethers.utils.formatUnits(balance, decimals)));
+          })
+          .catch(reject);
+      });
+  };
+
+  // Transaction history
+  ethOperator.getTransactions = addr => {
+      return new Promise((resolve, reject) => {
+          if (!ethOperator.validateAddress(addr))
+              return reject("Invalid address");
+              
+          multiApi('txs', { addr })
+              .then(txs => resolve(txs.map(tx => parseTx(tx, addr))))
+              .catch(reject);
+      });
+  };
+
+  // Transaction details
+  ethOperator.getTransaction = txid => {
+      return new Promise((resolve, reject) => {
+          if (!/^0x([A-Fa-f0-9]{64})$/.test(txid))
+              return reject("Invalid transaction hash");
+              
+          multiApi('tx', { txid })
+              .then(tx => resolve(formatTx(tx)))
+              .catch(reject);
+      });
+  };
+
+  // Create and send transactions
+  ethOperator.createTransaction = ({ from, to, value, data = '0x', gasLimit, gasPrice }) => {
+      return new Promise((resolve, reject) => {
+          try {
+              if (!ethOperator.validateAddress(from)) throw "Invalid sender address";
+              if (to && !ethOperator.validateAddress(to)) throw "Invalid recipient address";
+              
+              const tx = {
+                  from,
+                  to,
+                  value: util.ETH_to_Wei(value),
+                  data,
+                  gasLimit,
+                  gasPrice: gasPrice ? util.ETH_to_Wei(gasPrice) : undefined
+              };
+              
+              resolve(tx);
+          } catch (error) {
+              reject(error);
+          }
+      });
+  };
+
+  ethOperator.sendTransaction = ({ privateKey, to, value, data = '0x' }) => {
+      return new Promise(async (resolve, reject) => {
+          try {
+              const provider = getProvider();
+              const wallet = new ethers.Wallet(privateKey, provider);
+              
+              const tx = await ethOperator.createTransaction({
+                  from: wallet.address,
+                  to,
+                  value,
+                  data
+              });
+              
+              const sentTx = await wallet.sendTransaction(tx);
+              resolve(sentTx.hash);
+          } catch (error) {
+              reject(error);
+          }
+      });
+  };
+
+  // Token transfers
+  ethOperator.sendToken = ({ privateKey, tokenAddress, to, value }) => {
+      return new Promise(async (resolve, reject) => {
+          try {
+              const provider = getProvider();
+              const wallet = new ethers.Wallet(privateKey, provider);
+              const contract = new ethers.Contract(
+                  tokenAddress,
+                  [
+                      "function transfer(address to, uint256 value) returns (bool)",
+                      "function decimals() view returns (uint8)"
+                  ],
+                  wallet
+              );
+              
+              const decimals = await contract.decimals();
+              const amount = ethers.utils.parseUnits(value.toString(), decimals);
+              
+              const tx = await contract.transfer(to, amount);
+              resolve(tx.hash);
+          } catch (error) {
+              reject(error);
+          }
+      });
+  };
+
+  // Address data aggregation
+  ethOperator.getAddressData = address => {
+      return new Promise((resolve, reject) => {
+          Promise.all([
+              ethOperator.getBalance(address),
+              ethOperator.getTransactions(address)
+          ])
+          .then(([balance, txs]) => {
+              resolve({
+                  address,
+                  balance,
+                  txs
+              });
+          })
+          .catch(reject);
+      });
+  };
+
 })('object' === typeof module ? module.exports : window.ethOperator = {});

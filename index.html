@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FLO Ethereum</title>
-    <link rel="stylesheet" href="css/main.min.css">
+    <link rel="stylesheet" href="css/main.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -140,6 +140,14 @@
         </nav>
         <div id="page_container"></div>
     </main>
+
+
+
+
+
+
+
+
     <sm-popup id="transaction_result_popup">
         <header slot="header" class="popup__header">
             <div class="flex align-center">
@@ -167,16 +175,118 @@
     <!-- ethers.js version 5.6 -->
 
     <script src="https://unpkg.com/uhtml@3.0.1/es.js"></script>
-    <script src="scripts/components.min.js" type="text/javascript"></script>
-    <script src="scripts/btcwallet_scripts_lib.js" type="text/javascript"></script>
-    <script src="scripts/btcOperator.js" type="text/javascript"></script>
-    <script src="scripts/floCrypto.js" type="text/javascript"></script>
+    <script src="scripts/components.js" type="text/javascript"></script>
+    <!-- <script src="scripts/btcwallet_scripts_lib.js" type="text/javascript"></script> -->
+    <!-- <script src="scripts/btcOperator.js" type="text/javascript"></script> -->
+    <!-- <script src="scripts/floCrypto.js" type="text/javascript"></script> -->
     <script src="scripts/tap_combined.js" type="text/javascript"></script>
     <script src="scripts/keccak.js" type="text/javascript"></script>
     <script src="scripts/floEthereum.js" type="text/javascript"></script>
     <script src="scripts/compactIDB.js" type="text/javascript"></script>
     <script src="scripts/ether.umd.min.js" type="text/javascript"> </script>
     <script src="scripts/ethOperator.js" type="text/javascript"> </script>
+    <script>
+        class TransactionCard extends HTMLElement {
+    constructor() {
+        super();
+        this.transactionDetails = {};
+    }
+
+    render(transactionDetails) {
+        if (transactionDetails) {
+            this.transactionDetails = transactionDetails;
+        }
+        let { address, amount, time, txid, sender, receiver, type, block, historicPrice } = this.transactionDetails;
+        let transactionReceiver;
+        let icon;
+        const transactingAddresses = (receiver || sender || []);
+        const transactingAddressesLinks = transactingAddresses
+            .slice(0, 2)
+            .map(addr => html`<a href="${`#/check_details?query=${addr}`}" class="tx-participant wrap-around">${addr}</a>`);
+        const isUnconfirmed = block < 0 || block === null || block === undefined;
+
+        if (type === 'out') {
+            transactionReceiver = html`Sent to ${transactingAddressesLinks}`;
+            icon = svg`<svg class="icon sent" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>`;
+        } else if (type === 'in') {
+            transactionReceiver = html`Received from ${transactingAddressesLinks}`;
+            icon = svg`<svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/></svg>`;
+        } else if (type === 'self') {
+            transactionReceiver = `Sent to self`;
+            icon = svg`<svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><path d="M0 0h24v24H0V0z" fill="none"/><path d="m19 8-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/></svg>`;
+        }
+        if (isUnconfirmed) {
+            icon = svg`<svg class="icon" xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><g><rect fill="none" height="24" width="24"/></g><g><path d="M6,2l0.01,6L10,12l-3.99,4.01L6,22h12v-6l-4-4l4-3.99V2H6z M16,16.5V20H8v-3.5l4-4L16,16.5z"/></g></svg>`;
+        }
+
+        const queriedAddress = router.state.params?.query || getRef('search_query_input')?.value.trim() || address;
+        const isSender = type === 'out' || type === 'self';
+        const className = `transaction grid ${type} ${isUnconfirmed ? 'unconfirmed-tx' : ''}`;
+
+        // Fallbacks for missing utilities
+        const getConvertedAmount = window.getConvertedAmount || ((amt) => amt); // Default to raw amount
+        const getFormattedTime = window.getFormattedTime || ((t) => new Date(t).toLocaleString()); // Default to local string
+        const selectedCurrency = window.selectedCurrency || { value: 'eth' }; // Default to ETH
+        const showCurrentValue = window.showCurrentValue || { value: true }; // Default to true
+        const showAllAddresses = window.showAllAddresses || (() => console.log('Show all addresses clicked'));
+        const initFeeChange = window.initFeeChange || ((e, id) => console.log('Increase fee for:', id));
+
+        const valuationDelta = historicPrice && historicPrice[selectedCurrency.value] 
+            ? getConvertedAmount(amount) - getConvertedAmount(amount, { onDate: time }) 
+            : 0;
+        const amountOptions = { shouldFormatAmount: true };
+        if (selectedCurrency.value !== 'btc' && !showCurrentValue.value && historicPrice && historicPrice[selectedCurrency.value]) {
+            amountOptions.onDate = time;
+        }
+
+        renderElem(this, html`
+            <li class="${className}" .dataset=${{ txid, transactingAddresses: transactingAddresses.slice(2), currency: selectedCurrency.value }}>
+                <div class="transaction__icon">${icon}</div>
+                <div class="grid gap-0-5">
+                    <div class="flex gap-1 space-between">
+                        ${time ? html`
+                            <time class="transaction__time">${getFormattedTime(time)}</time>
+                        ` : ''}
+                        <div class="transaction__amount">${getConvertedAmount(amount, amountOptions)}</div>
+                    </div>
+                    <div class="transaction__receiver">
+                        ${transactionReceiver}
+                        ${transactingAddresses.length > 2 ? html`<button onclick=${showAllAddresses} class="button button--small show-more" title="See all addresses">... +${transactingAddresses.length - 2} more</button>` : ''}
+                    </div>
+                    <div class="flex gap-0-5 flex-wrap align-center">
+                        // Replace the existing "View details" <a> tag inside renderElem with this:
+<a class="button button--small gap-0-3 align-center button--colored transaction__id" href="${`#/transaction_details?txid=${txid}`}" onclick=${(e) => { e.preventDefault(); router.routeTo(`#/transaction_details?txid=${txid}`); }}>
+    <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+    View Details
+</a>
+                        ${isSender && !block ? html`
+                            <div class="multi-state-button">
+                                <button class="button button--small gap-0-3" onclick=${(e) => initFeeChange(e, txid)} title="Resend transaction with greater fees to reduce confirmation time">
+                                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>
+                                    Increase fee
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${isUnconfirmed ? html`
+                        <p class="pending-badge">
+                            ${type === 'out' ? `
+                                Confirmation pending: Amount will be deducted after transaction is confirmed.
+                            ` : `
+                                Confirmation pending: Balance will be updated after transaction is confirmed.
+                            `}
+                            ${isSender && !block ? ' Try increasing fee to speed up confirmation' : ''}
+                        </p>
+                    ` : ''}
+                </div>
+            </li>
+        `);
+    }
+}
+
+// Register the custom element
+customElements.define('transaction-card', TransactionCard);
+    </script>
     <script>
         const uiGlobals = {}
         const { html, svg, render: renderElem } = uhtml;
@@ -460,12 +570,20 @@
                 {
                     selector: '#check_balance_input',
                     customValidation: (value) => {
-                        if (!value) return { isValid: false, errorText: 'Please enter a private key or eth address' }
-                        return {
-                            isValid: floCrypto.getPubKeyHex(value) || ethOperator.isValidAddress(value),
-                            errorText: `Invalid private key or eth address"`
-                        }
+                    console.log('Input value:', value);
+                    if (!value) {
+                        console.log('Validation failed: Empty input');
+                        return { isValid: false, errorText: 'Please enter an Ethereum address or private key' };
                     }
+                    const isValidAddress = ethOperator.validateAddress(value);
+                    const isValidPrivateKey = /^[0-9a-fA-F]{64}$/.test(value);
+                    console.log('isValidAddress:', isValidAddress);
+                    console.log('isValidPrivateKey:', isValidPrivateKey);
+                    return {
+                        isValid: isValidAddress || isValidPrivateKey,
+                        errorText: 'Invalid Ethereum address or private key'
+                    };
+                }
                 }
             ]
         }
@@ -576,45 +694,62 @@
         router.addRoute('', renderHome)
         router.addRoute('balance', renderHome)
         function renderHome(state) {
-            getRef('page_container').dataset.page = 'home'
-            renderElem(getRef('page_container'), html`
-                <aside id="saved_addresses_wrapper" class="flex flex-direction-column">
-                    <h4>
-                        Searched addresses
-                    </h4>
-                    <ul id="searched_addresses_list" class="grid gap-0-5"></ul>
-                </aside>
-                <section id="balance_section" class="grid gap-1-5">
-                    <h2>
-                        Check Ether, USDC and USDT balance
-                    </h2>
-                    <sm-form oninvalid="handleInvalidSearch()">
-                        <div id="input_wrapper">
-                            <sm-input id="check_balance_input" class="password-field flex-1" placeholder="FLO/BTC private key or Eth address"
-                                type="password" animate required>
-                                <svg class="icon" slot="icon" xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"> <g> <rect fill="none" height="24" width="24"></rect> </g> <g> <path d="M21,10h-8.35C11.83,7.67,9.61,6,7,6c-3.31,0-6,2.69-6,6s2.69,6,6,6c2.61,0,4.83-1.67,5.65-4H13l2,2l2-2l2,2l4-4.04L21,10z M7,15c-1.65,0-3-1.35-3-3c0-1.65,1.35-3,3-3s3,1.35,3,3C10,13.65,8.65,15,7,15z"> </path> </g> </svg>
-                                <label slot="right" class="interact">
-                                    <input type="checkbox" class="hidden" autocomplete="off" readonly
-                                        onchange="togglePrivateKeyVisibility(this)">
-                                    <svg class="icon invisible" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"> <title>Hide password</title> <path d="M0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0z" fill="none"></path> <path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"> </path> </svg>
-                                    <svg class="icon visible" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000"> <title>Show password</title> <path d="M0 0h24v24H0z" fill="none"></path> <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"> </path> </svg>
-                                </label>
-                            </sm-input>
-                            <div class="multi-state-button">
-                                <button id="check_balance_button" class="button button--primary h-100 w-100" type="submit" onclick=${() => checkBalance()} disabled>
-                                    Check balance
-                                </button>
-                            </div>
-                        </div>
-                    </sm-form>
-                    <div id="eth_balance_wrapper" class="grid gap-2 hidden"></div>
-                </section>
-            `)
-            if (window.ethereum && !(window.currentChainId && window.currentChainId === '0x1')) {
-                renderError('Please switch MetaMask to Ethereum Mainnet')
-            }
-            renderSearchedAddressList()
-        }
+    getRef('page_container').dataset.page = 'home';
+    renderElem(getRef('page_container'), html`
+        <section id="balance_section" class="grid gap-1-5">
+            <h2>Check Ether, USDC, and USDT Balance</h2>
+            <sm-form oninvalid="handleInvalidSearch()">
+                <div id="input_wrapper">
+                    <sm-input id="check_balance_input" class="password-field flex-1" 
+                        placeholder="Ethereum address or private key"
+                        type="password" animate required
+                        oninput=${(e) => {
+                            const button = getRef('check_balance_button');
+                            button.disabled = !e.target.isValid;
+                        }}>
+                        <svg class="icon" slot="icon" xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 24 24" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000">
+                            <g><rect fill="none" height="24" width="24"></rect></g>
+                            <g><path d="M21,10h-8.35C11.83,7.67,9.61,6,7,6c-3.31,0-6,2.69-6,6s2.69,6,6,6c2.61,0,4.83-1.67,5.65-4H13l2,2l2-2l2,2l4-4.04L21,10z M7,15c-1.65,0-3-1.35-3-3c0-1.65,1.35-3,3-3s3,1.35,3,3C10,13.65,8.65,15,7,15z"></path></g>
+                        </svg>
+                        <label slot="right" class="interact">
+                            <input type="checkbox" class="hidden" autocomplete="off" readonly onchange="togglePrivateKeyVisibility(this)">
+                            <svg class="icon invisible" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000">
+                                <path d="M0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0zm0 0h24v24H0z" fill="none"></path>
+                                <path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15"></path>
+                            </svg>
+                            <svg class="icon visible" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000">
+                                <path d="M0 0h24v24H0z" fill="none"></path>
+                                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path>
+                            </svg>
+                        </label>
+                    </sm-input>
+                    <div class="multi-state-button">
+                        <button id="check_balance_button" class="button button--primary h-100 w-100" 
+                            type="submit" onclick=${() => checkBalance()} disabled>
+                            Check balance
+                        </button>
+                    </div>
+                </div>
+            </sm-form>
+            <div id="eth_balance_wrapper" class="grid gap-2 hidden"></div>
+            
+    <section id="transaction_details_wrapper" class="hidden">
+        <div class="grid gap-1">
+            <h3>Transaction Details</h3>
+            <div id="transaction_details_content" class="grid gap-0-5">
+                <!-- Details will be rendered here -->
+            </div>
+            <button class="button" onclick="router.routeTo('#/balance')">Back to Balance</button>
+        </div>
+    </section>
+
+        </section>
+    `);
+    if (window.ethereum && window.currentChainId !== '0x1') {
+        renderError('Please switch MetaMask to Ethereum Mainnet');
+    }
+    renderSearchedAddressList();
+}
         function renderError(title, description) {
             if (!title)
                 title = 'MetaMask not installed'
@@ -679,88 +814,138 @@
                 console.error(error)
             })
         }
-        function checkBalance(ethAddress, floAddress) {
+        function checkBalance(ethAddress) {
+    const inputValue = document.querySelector('#check_balance_input').value.trim();
+    if (!ethAddress) {
+        if (ethOperator.validateAddress(inputValue)) {
+            ethAddress = inputValue.toLowerCase();
+        } else if (/^[0-9a-fA-F]{64}$/.test(inputValue)) {
+            ethAddress = ethOperator.addressFromPrivateKey(inputValue);
             if (!ethAddress) {
-                const keyToConvert = document.querySelector('#check_balance_input').value.trim()
-                if (ethOperator.isValidAddress(keyToConvert)) {
-                    ethAddress = keyToConvert
-                } else {
-                    if (/^[0-9a-fA-F]{64}$/.test(keyToConvert)) {
-                        keyToConvert = coinjs.privkey2wif(keyToConvert)
-                    }
-                    const ethPrivateKey = coinjs.wif2privkey(keyToConvert).privkey;
-                    ethAddress = floEthereum.ethAddressFromPrivateKey(ethPrivateKey)
-                    floAddress = floCrypto.getFloID(keyToConvert)
-                }
+                notify('Invalid Ethereum private key', 'error');
+                return;
             }
-            if (!ethAddress) return
-            buttonLoader('check_balance_button', true)
-            Promise.all([
-                ethOperator.getBalance(ethAddress),
-                ethOperator.getTokenBalance(ethAddress, 'usdc'),
-                ethOperator.getTokenBalance(ethAddress, 'usdt')
-            ])
-                .then(([etherBalance, usdcBalance, usdtBalance]) => {
-                    compactIDB.readData('contacts', floAddress || ethAddress).then(result => {
-                        if (result) return
-                        compactIDB.addData('contacts', {
-                            ethAddress,
-                        }, floAddress || ethAddress).then(() => {
-                            renderSearchedAddressList()
-                        }).catch((error) => {
-                            console.error(error)
-                        })
-                    })
-                    renderElem(getRef('eth_balance_wrapper'), html`
-                        <div class="grid">
-                            <div class="label">ETH address</div>
-                            <sm-copy id="eth_address" value=${ethAddress}></sm-copy>
-                        </div>
-                        ${floAddress && floAddress !== ethAddress ? html`
-                            <div class="grid">
-                                <div class="label">FLO address</div>
-                                <sm-copy id="flo_address" value=${floAddress}></sm-copy>
-                            </div>
-                        `: ''}
-                        <div class="grid gap-1">
-                            <h4>Balance</h4>
-                            <ul id="eth_address_balance" class="flex flex-direction-column gap-0-5">
-                                <li class="flex align-center space-between">
-                                    <p>Ether</p>
-                                    <b id="ether_balance">${etherBalance} ETH</b>
-                                </li>
-                                <li class="flex align-center space-between">
-                                    <p>USDC</p>
-                                    <b id="usdc_balance">${usdcBalance} USDC</b>
-                                </li>
-                                <li class="flex align-center space-between">
-                                    <p>USDT</p>
-                                    <b id="usdt_balance">${usdtBalance} USDT</b>
-                                </li>
-                            </ul>
-                        </div>
-                    `)
-                    getRef('eth_balance_wrapper').classList.remove('hidden')
-                    getRef('eth_balance_wrapper').animate([
-                        {
-                            transform: 'translateY(-1rem)',
-                            opacity: 0
-                        },
-                        {
-                            transform: 'none',
-                            opacity: 1
-                        }
-                    ], {
-                        easing: 'ease',
-                        duration: 300,
-                        fill: 'forwards'
-                    })
-                }).catch((error) => {
-                    notify(error, 'error')
-                }).finally(() => {
-                    buttonLoader('check_balance_button', false)
-                })
+        } else {
+            notify('Please enter a valid Ethereum address or private key', 'error');
+            return;
         }
+    }
+
+    buttonLoader('check_balance_button', true);
+
+    const ETHERSCAN_API_KEY = 'UIQ1Q1TVXRWD3K17AK3D7UZB5IJYCWCD7Y'; // Replace with your key
+
+    async function fetchTransactionHistory(address) {
+        const url = `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`;
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            if (data.status === "1") {
+                console.log('Transaction API response:', data.result);
+                return data.result.slice(0, 10);
+            } else {
+                throw new Error(data.message || "Failed to fetch transaction history");
+            }
+        } catch (error) {
+            console.error("Transaction fetch error:", error);
+            return [];
+        }
+    }
+
+    const balancePromise = ethOperator.getBalance(ethAddress)
+        .catch(err => {
+            console.error('Error fetching ETH balance:', err);
+            return 'N/A';
+        });
+    const usdcPromise = ethOperator.getTokenBalance(ethAddress, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
+        .catch(err => {
+            console.error('Error fetching USDC balance:', err);
+            return 'N/A';
+        });
+    const usdtPromise = ethOperator.getTokenBalance(ethAddress, '0xdac17f958d2ee523a2206206994597c13d831ec7')
+        .catch(err => {
+            console.error('Error fetching USDT balance:', err);
+            return 'N/A';
+        });
+    const txPromise = fetchTransactionHistory(ethAddress);
+
+    Promise.all([balancePromise, usdcPromise, usdtPromise, txPromise])
+        .then(([etherBalance, usdcBalance, usdtBalance, transactions]) => {
+            compactIDB.addData('contacts', { ethAddress }, ethAddress)
+                .then(() => renderSearchedAddressList())
+                .catch((error) => {
+                    if (error.name !== 'ConstraintError') {
+                        console.error('CompactIDB error:', error);
+                    }
+                });
+
+            console.log('ETH Balance:', etherBalance);
+            console.log('USDC Balance:', usdcBalance);
+            console.log('USDT Balance:', usdtBalance);
+            console.log('Transactions:', transactions);
+
+            // Map Etherscan transactions to TransactionCard format
+            const transactionElements = transactions.map(tx => {
+                const card = document.createElement('transaction-card');
+                const isSent = tx.from.toLowerCase() === ethAddress.toLowerCase();
+                const type = isSent && tx.to.toLowerCase() === ethAddress.toLowerCase() ? 'self' : (isSent ? 'out' : 'in');
+                const details = {
+                    address: ethAddress,
+                    amount: ethers.utils.formatEther(tx.value), // Amount in ETH
+                    time: tx.timeStamp * 1000, // Convert to milliseconds
+                    txid: tx.hash,
+                    sender: [tx.from],
+                    receiver: [tx.to],
+                    type: type,
+                    block: tx.blockNumber,
+                    historicPrice: null // Add if you have price data
+                };
+                card.render(details);
+                return card;
+            });
+
+            renderElem(getRef('eth_balance_wrapper'), html`
+                <div class="grid">
+                    <div class="label">ETH address</div>
+                    <sm-copy id="eth_address" value=${ethAddress}></sm-copy>
+                </div>
+                <div class="grid gap-1">
+                    <h4>Balance</h4>
+                    <ul id="eth_address_balance" class="flex flex-direction-column gap-0-5">
+                        <li class="flex align-center space-between">
+                            <p>Ether</p>
+                            <b id="ether_balance">${etherBalance === 'N/A' ? 'N/A' : `${etherBalance} ETH`}</b>
+                        </li>
+                        <li class="flex align-center space-between">
+                            <p>USDC</p>
+                            <b id="usdc_balance">${usdcBalance === 'N/A' ? 'N/A' : `${usdcBalance} USDC`}</b>
+                        </li>
+                        <li class="flex align-center space-between">
+                            <p>USDT</p>
+                            <b id="usdt_balance">${usdtBalance === 'N/A' ? 'N/A' : `${usdtBalance} USDT`}</b>
+                        </li>
+                    </ul>
+                </div>
+                <div class="grid gap-1">
+                    <h4>Recent Transactions</h4>
+                    <ul id="transaction_history" class="flex flex-direction-column gap-0-5">
+                        ${transactionElements.length > 0 ? transactionElements : html`<li>No recent transactions found.</li>`}
+                    </ul>
+                </div>
+            `);
+
+            getRef('eth_balance_wrapper').classList.remove('hidden');
+            getRef('eth_balance_wrapper').animate([
+                { transform: 'translateY(-1rem)', opacity: 0 },
+                { transform: 'none', opacity: 1 }
+            ], { easing: 'ease', duration: 300, fill: 'forwards' });
+        })
+        .catch((error) => {
+            console.error('Promise.all error:', error);
+            notify('Failed to fetch some data. Check console for details.', 'error');
+        })
+        .finally(() => buttonLoader('check_balance_button', false));
+}
         function handleInvalidSearch() {
             if (document.startViewTransition)
                 document.startViewTransition(() => {
@@ -996,6 +1181,13 @@
             }
             openPopup('transaction_result_popup')
         }
+
+        router.addRoute('transaction_details', (state) => {
+    getRef('page_container').dataset.page = 'transaction_details';
+    getRef('eth_balance_wrapper').classList.add('hidden');
+    getRef('transaction_details_wrapper').classList.remove('hidden');
+    showTransactionDetails(state.params.txid);
+});
         router.addRoute('create', (state) => {
             getRef('page_container').dataset.page = 'create'
             renderElem(getRef('page_container'), html`
@@ -1051,6 +1243,130 @@
                 </ul>
             `)
         }
+        async function showTransactionDetails(txid) {
+    const ETHERSCAN_API_KEY = 'UIQ1Q1TVXRWD3K17AK3D7UZB5IJYCWCD7Y';
+    const address = getRef('eth_address')?.value || ''; // Current address from balance section
+    const url = `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`;
+    
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.status !== "1") {
+            throw new Error(data.message || 'Failed to fetch transaction details');
+        }
+
+        const tx = data.result.find(t => t.hash === txid);
+        if (!tx) {
+            throw new Error('Transaction not found');
+        }
+
+        // Log the transaction object to confirm data
+        console.log('Transaction data:', tx);
+
+        // Render the transaction details
+        renderElem(getRef('transaction_details_content'), html`
+            <div id="tx_details">
+    <div id="tx_details__header">
+       
+        <time>${new Date(parseInt(tx.timeStamp) * 1000).toLocaleString()}</time>
+        ${tx.txreceipt_status === "0" || !tx.blockNumber ? html`
+            <h4 id="tx_status">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000">
+                    <path d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>
+                    <path d="M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                </svg>
+                Unconfirmed
+            </h4>
+        ` : ''}
+    </div>
+    <div>
+        <p><strong>Amount</strong></p>
+        <div id="tx_amount">${ethers.utils.formatEther(tx.value)} ETH</div>
+    </div>
+    <div id="tx_technicals" class="details-wrapper">
+        <div class="tx-detail">
+            <div class="flex align-center gap-0-3">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000">
+                    <path d="M0 0h24v24H0V0z"/>
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                </svg>
+                <div>Status</div>
+            </div>
+            <div>${tx.txreceipt_status === "1" && tx.blockNumber ? 'Confirmed' : 'Pending'}</div>
+        </div>
+        <div class="tx-detail">
+            <div class="flex align-center gap-0-3">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000">
+                    <path d="M0 0h24v24H0V0z" fill="none"/>
+                    <path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
+                </svg>
+                <div>Transaction Hash</div>
+            </div>
+            <div>
+                <span>${tx.hash.slice(0, 6)}...${tx.hash.slice(-4)}</span>
+                <button class="button button--small" onclick=${() => navigator.clipboard.writeText(tx.hash).then(() => notify('Copied to clipboard', 'success'))}>Copy</button>
+            </div>
+        </div>
+        <div class="tx-detail">
+            <div class="flex align-center gap-0-3">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000">
+                    <path d="M0 0h24v24H0V0z" fill="none"/>
+                    <path d="M15 4c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>
+                </svg>
+                <div>Gas Used</div>
+            </div>
+            <div>${tx.gasUsed} (Price: ${ethers.utils.formatUnits(tx.gasPrice, 'gwei')} Gwei)</div>
+        </div>
+        <div class="tx-detail">
+            <div class="flex align-center gap-0-3">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000">
+                    <path d="M0 0h24v24H0V0z" fill="none"/>
+                    <path d="M15 4c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>
+                </svg>
+                <div>Block Number</div>
+            </div>
+            <div>${tx.blockNumber || 'Pending'}</div>
+        </div>
+        <div class="tx-detail">
+            <div class="flex align-center gap-0-3">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#000000">
+                    <path d="M0 0h24v24H0V0z"/>
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                </svg>
+                <div>Confirmations</div>
+            </div>
+            <div>${tx.confirmations}</div>
+        </div>
+    </div>
+    <div id="in_out_wrapper">
+        <div>
+            <div class="margin-bottom-1" style="padding: 0.5rem 1rem;">
+                <b>Participants</b>
+            </div>
+            <ul>
+                <li class="in-out-card">
+                    <span class="tx-participant">
+                        <strong>From:</strong>
+                        <a href="${`#/check_details?query=${tx.from}`}" onclick=${(e) => { e.preventDefault(); router.routeTo(`#/check_details?query=${tx.from}`); }}>${tx.from.slice(0, 6)}...${tx.from.slice(-4)}</a>
+                    </span>
+                    <span class="tx-participant">
+                        <strong>To:</strong>
+                        <a href="${`#/check_details?query=${tx.to}`}" onclick=${(e) => { e.preventDefault(); router.routeTo(`#/check_details?query=${tx.to}`); }}>${tx.to.slice(0, 6)}...${tx.to.slice(-4)}</a>
+                    </span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+        `);
+    } catch (error) {
+        console.error('Error fetching transaction details:', error);
+        renderElem(getRef('transaction_details_content'), html`
+            <p>Error loading transaction details: ${error.message}</p>
+        `);
+    }
+}
     </script>
 </body>
 
